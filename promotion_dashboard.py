@@ -11,8 +11,18 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# Load data
-df = pd.read_csv("Promotion_Predictions_Updated.csv")
+# Load data - preserve data types from CSV
+df = pd.read_csv("Promotion_Predictions_Updated.csv", dtype=str)
+
+# Convert numeric columns to appropriate types
+numeric_cols = ["Age", "Experience_Years", "PerformanceScore", "Promotion_Predicted"]
+for col in numeric_cols:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+# Convert Promotion_Predicted to integer (0 or 1)
+if "Promotion_Predicted" in df.columns:
+    df["Promotion_Predicted"] = df["Promotion_Predicted"].fillna(0).astype(int)
 
 st.set_page_config(page_title="Promotion Prediction Dashboard",
                    layout="wide",
@@ -23,10 +33,10 @@ st.title("📊 Employee Promotion Prediction Dashboard")
 # ---------------- Sidebar Filters ---------------- #
 st.sidebar.header("🔍 Filter Employees")
 
-gender_filter = st.sidebar.multiselect("Gender", options=df["Gender"].unique(), default=df["Gender"].unique())
-department_filter = st.sidebar.multiselect("Department", options=df["Department"].unique(), default=df["Department"].unique())
+gender_filter = st.sidebar.multiselect("Gender", options=sorted(df["Gender"].unique()), default=df["Gender"].unique())
+department_filter = st.sidebar.multiselect("Department", options=sorted(df["Department"].unique()), default=df["Department"].unique())
 age_filter = st.sidebar.slider("Age Range", int(df["Age"].min()), int(df["Age"].max()), (int(df["Age"].min()), int(df["Age"].max())))
-empid_filter = st.sidebar.selectbox("Employee ID (optional filter)", ["All"] + list(df["EmployeeID"].unique()))
+empid_filter = st.sidebar.selectbox("Employee ID (optional filter)", ["All"] + sorted(df["EmployeeID"].unique().tolist()))
 
 # Apply filters
 filtered = df[
@@ -41,7 +51,7 @@ if empid_filter != "All":
 
 # ---------------- KPI Cards ---------------- #
 total_employees = len(filtered)
-promoted = filtered["Promotion_Predicted"].sum()
+promoted = int(filtered["Promotion_Predicted"].sum())
 not_promoted = total_employees - promoted
 promotion_rate = round((promoted / total_employees) * 100, 2) if total_employees > 0 else 0
 
@@ -54,42 +64,69 @@ kpi4.metric("Promotion Rate (%)", promotion_rate)
 st.markdown("---")
 
 # ---------------- Visual 1: Count by Department ---------------- #
-fig1 = px.histogram(filtered, x="Department", color="Promotion_Predicted", barmode="group",
-                    title="Promotion Count by Department")
+# Convert Promotion_Predicted to string for better legend display
+filtered_viz = filtered.copy()
+filtered_viz["Promotion_Status"] = filtered_viz["Promotion_Predicted"].map({1: "Promoted", 0: "Not Promoted"})
+
+fig1 = px.histogram(filtered_viz, x="Department", color="Promotion_Status", barmode="group",
+                    title="Promotion Count by Department",
+                    color_discrete_map={"Promoted": "#00CC96", "Not Promoted": "#EF553B"})
 st.plotly_chart(fig1, use_container_width=True)
 
 # ---------------- Visual 2: Promotions by Gender ---------------- #
-fig2 = px.pie(filtered, names="Gender", values="Promotion_Predicted", title="Gender-wise Promotion Distribution")
+# Calculate actual promotion counts by gender
+gender_promo = filtered[filtered["Promotion_Predicted"] == 1].groupby("Gender").size().reset_index(name="Count")
+fig2 = px.pie(gender_promo, names="Gender", values="Count", title="Gender-wise Promotion Distribution")
 st.plotly_chart(fig2, use_container_width=True)
 
 # ---------------- Visual 3: Age vs Promotion ---------------- #
-fig3 = px.box(filtered, x="Promotion_Predicted", y="Age", title="Age Distribution by Promotion Status",
-              color="Promotion_Predicted")
+fig3 = px.box(filtered_viz, x="Promotion_Status", y="Age", title="Age Distribution by Promotion Status",
+              color="Promotion_Status",
+              color_discrete_map={"Promoted": "#00CC96", "Not Promoted": "#EF553B"})
 st.plotly_chart(fig3, use_container_width=True)
 
 # ---------------- Visual 4: Experience vs Performance ---------------- #
-fig4 = px.scatter(filtered, x="Experience_Years", y="PerformanceScore",
-                  color="Promotion_Predicted", size=filtered["Experience_Years"].abs(),
-                  title="Experience vs Performance (Promotion Indicator)")
+fig4 = px.scatter(filtered_viz, x="Experience_Years", y="PerformanceScore",
+                  color="Promotion_Status", size=filtered_viz["Experience_Years"].abs() + 1,
+                  title="Experience vs Performance (Promotion Indicator)",
+                  color_discrete_map={"Promoted": "#00CC96", "Not Promoted": "#EF553B"})
 st.plotly_chart(fig4, use_container_width=True)
 
 # ---------------- Visual 5: Average Performance Score by Department ---------------- #
-fig5 = px.bar(filtered.groupby("Department")["PerformanceScore"].mean().reset_index(),
+avg_perf = filtered.groupby("Department")["PerformanceScore"].mean().reset_index()
+avg_perf["PerformanceScore"] = avg_perf["PerformanceScore"].round(2)
+fig5 = px.bar(avg_perf,
               x="Department", y="PerformanceScore",
-              title="Average Performance Score by Department")
+              title="Average Performance Score by Department",
+              text="PerformanceScore")
+fig5.update_traces(texttemplate='%{text:.2f}', textposition='outside')
 st.plotly_chart(fig5, use_container_width=True)
 
 # ---------------- Visual 6: Heatmap – Promotion by Age Group & Department ---------------- #
-heatmap_data = filtered.pivot_table(values="Promotion_Predicted", index="Age_Category", columns="Department", aggfunc="sum")
-fig6 = px.imshow(heatmap_data, text_auto=True, title="Promotion Heatmap by Age Category and Department")
-st.plotly_chart(fig6, use_container_width=True)
+if "Age_Category" in filtered.columns:
+    heatmap_data = filtered.pivot_table(values="Promotion_Predicted", index="Age_Category", columns="Department", aggfunc="sum", fill_value=0)
+    heatmap_data = heatmap_data.astype(int)  # Convert to integers
+    fig6 = px.imshow(heatmap_data, text_auto=True, title="Promotion Heatmap by Age Category and Department",
+                     color_continuous_scale="Blues")
+    st.plotly_chart(fig6, use_container_width=True)
+else:
+    st.warning("Age_Category column not found in dataset. Skipping heatmap visualization.")
 
 st.markdown("---")
 
 # ---------------- Display Data ---------------- #
 st.subheader("📄 Filtered Employee Data")
-st.dataframe(filtered)
+# Format the display dataframe
+display_df = filtered.copy()
+# Ensure numeric columns show properly
+for col in ["Age", "Experience_Years"]:
+    if col in display_df.columns:
+        display_df[col] = display_df[col].astype(int)
+if "PerformanceScore" in display_df.columns:
+    display_df["PerformanceScore"] = display_df["PerformanceScore"].round(2)
+
+st.dataframe(display_df, use_container_width=True)
 
 # ---------------- Download Button ---------------- #
-csv = filtered.to_csv(index=False).encode("utf-8")
+csv = display_df.to_csv(index=False).encode("utf-8")
 st.download_button("⬇ Download Filtered Dataset", data=csv, file_name="Filtered_Promotion_Data.csv", mime="text/csv")
