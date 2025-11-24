@@ -19,9 +19,9 @@ import os
 st.set_page_config(page_title="HR Promotions Dashboard", layout="wide")
 st.title("📊 HR Promotions Analytics Dashboard")
 
-# ------------------------------------------
+# -----------------------------------------------------------
 # Load dataset
-# ------------------------------------------
+# -----------------------------------------------------------
 file_name = "Final_Promotions_Predicted_Dataset.csv"
 if not os.path.exists(file_name):
     st.error(f"CSV file '{file_name}' NOT found in app folder.")
@@ -29,88 +29,89 @@ if not os.path.exists(file_name):
 
 df = pd.read_csv(file_name)
 
-# ------------------------------------------
-# Auto detect column names by keyword matching
-# ------------------------------------------
+# -----------------------------------------------------------
+# Auto-detect column names
+# -----------------------------------------------------------
 columns = {c.lower().strip(): c for c in df.columns}
 
-# Promotion result column
-promotion_col = next((v for k, v in columns.items() if "predict" in k), None)
+promotion_col  = next((v for k, v in columns.items() if "predict" in k), None)
+dept_col       = next((v for k, v in columns.items() if "dept" in k or "department" in k), None)
+gender_col     = next((v for k, v in columns.items() if "gender" in k or "sex" in k), None)
+prob_col       = next((v for k, v in columns.items() if "prob" in k or "score" in k), None)
+experience_col = next((v for k, v in columns.items() if "experience" in k or "exp" in k), None)
+education_col  = next((v for k, v in columns.items() if "edu" in k or "qualification" in k), None)
 
-# Department column
-department_col = next((v for k, v in columns.items() if "dept" in k or "department" in k), None)
-
-# Gender column
-gender_col = next((v for k, v in columns.items() if "gender" in k or "sex" in k), None)
-
-# Numeric probability column (optional)
-prob_col = next((v for k, v in columns.items() if "prob" in k or "score" in k), None)
-
-# Safety checks
-if promotion_col is None:
-    st.error("❌ Could not find promotion/prediction column (should contain the word 'predict').")
-    st.stop()
-
-# Convert 0/1 to Yes/No if needed
 df[promotion_col] = df[promotion_col].replace({1: "Yes", 0: "No"})
 
-# ------------------------------------------
+# -----------------------------------------------------------
 # Filters
-# ------------------------------------------
-st.sidebar.header("🔍 Filters")
+# -----------------------------------------------------------
 filtered = df.copy()
+st.sidebar.header("🔍 Filters")
 
-if department_col:
-    d = st.sidebar.multiselect("Department", df[department_col].unique())
-    if d:
-        filtered = filtered[filtered[department_col].isin(d)]
+if dept_col:
+    d = st.sidebar.multiselect("Department", df[dept_col].unique())
+    if d: filtered = filtered[filtered[dept_col].isin(d)]
 
 if gender_col:
     g = st.sidebar.multiselect("Gender", df[gender_col].unique())
-    if g:
-        filtered = filtered[filtered[gender_col].isin(g)]
+    if g: filtered = filtered[filtered[gender_col].isin(g)]
 
-# ------------------------------------------
+# -----------------------------------------------------------
 # KPI Cards
-# ------------------------------------------
+# -----------------------------------------------------------
 total = len(filtered)
 promoted = filtered[promotion_col].eq("Yes").sum()
+not_promoted = total - promoted
+promotion_rate = (promoted / total * 100) if total > 0 else 0
 
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total Employees", total)
 c2.metric("Promoted Employees", promoted)
-c3.metric("Promotion %", f"{(promoted / total * 100):.2f}%")
+c3.metric("Not Promoted", not_promoted)
+c4.metric("Promotion %", f"{promotion_rate:.2f}%")
 
 st.markdown("---")
 
-# ------------------------------------------
+# -----------------------------------------------------------
 # Visuals
-# ------------------------------------------
-if department_col:
-    st.subheader("Promotion by Department")
-    st.plotly_chart(px.histogram(
-        filtered, x=department_col, color=promotion_col, barmode="group"
-    ), use_container_width=True)
+# -----------------------------------------------------------
+
+if dept_col:
+    st.subheader("📌 Promotion Count by Department")
+    st.plotly_chart(px.histogram(filtered, x=dept_col, color=promotion_col, barmode="group"),
+                    use_container_width=True)
 
 if gender_col:
-    st.subheader("Promotion by Gender")
-    st.plotly_chart(px.histogram(
-        filtered, x=gender_col, color=promotion_col, barmode="group"
-    ), use_container_width=True)
+    st.subheader("📌 Promotion Count by Gender")
+    st.plotly_chart(px.histogram(filtered, x=gender_col, color=promotion_col, barmode="group"),
+                    use_container_width=True)
 
-if prob_col and "Satisfaction" in df.columns and "Performance" in df.columns:
-    st.subheader("Promotion Probability Heatmap")
+if experience_col:
+    st.subheader("📌 Promotion by Experience")
+    st.plotly_chart(px.box(filtered, x=promotion_col, y=experience_col, points="all",
+                           title="Experience Comparison | Promoted vs Not Promoted"),
+                    use_container_width=True)
+
+if education_col:
+    st.subheader("📌 Promotion by Education Level")
+    st.plotly_chart(px.histogram(filtered, x=education_col, color=promotion_col, barmode="group",
+                                 title="Education vs Promotion Outcome"),
+                    use_container_width=True)
+
+if prob_col and "satisfaction" in df.columns and "performance" in df.columns:
+    st.subheader("📌 Promotion Probability Heatmap")
     st.plotly_chart(px.density_heatmap(
-        filtered, x="Satisfaction", y="Performance", z=prob_col
-    ), use_container_width=True)
+        filtered, x="Satisfaction", y="Performance", z=prob_col,
+        title="Probability Density Map (Higher color = Higher Promotion likelihood)"),
+        use_container_width=True
+    )
 
-# ------------------------------------------
-# Table + Download
-# ------------------------------------------
 st.markdown("---")
-st.subheader("📋 Dataset Preview")
-st.dataframe(filtered, use_container_width=True)
 
+# -----------------------------------------------------------
+# Download button (no preview dataset)
+# -----------------------------------------------------------
 csv = filtered.to_csv(index=False).encode("utf-8")
-st.download_button("⬇ Download Filtered Dataset", data=csv,
-                   file_name="Filtered_Promotions.csv", mime="text/csv")
+st.download_button("⬇ Download Filtered Dataset",
+                   data=csv, file_name="Filtered_Promotions.csv", mime="text/csv")
