@@ -19,9 +19,9 @@ import os
 st.set_page_config(page_title="HR Promotions Dashboard", layout="wide")
 st.title("📊 HR Promotions Analytics Dashboard")
 
-# ------------------------------------------------------------
-# Load Dataset (specific to user's uploaded file)
-# ------------------------------------------------------------
+# ---------------------------------------------------------------
+# Load dataset
+# ---------------------------------------------------------------
 @st.cache_data
 def load_data():
     file_name = "Final_Promotions_Predicted_Dataset.csv"
@@ -32,99 +32,70 @@ def load_data():
 
 df = load_data()
 
-# Rename 0/1 values to Yes/No to improve readability
-if "Promotion" in df.columns:
-    df["Promotion"] = df["Promotion"].map({1: "Yes", 0: "No"})
-if "Prediction" in df.columns:
-    df["Prediction"] = df["Prediction"].map({1: "Yes", 0: "No"})
+# Ensure readability (convert 0/1 to Yes/No if needed)
+df["Prediction"] = df["Prediction"].replace({1: "Yes", 0: "No"})
 
-# ------------------------------------------------------------
-# Filters
-# ------------------------------------------------------------
-st.sidebar.header("🔍 Filter Data")
-d_filter = st.sidebar.multiselect("Filter by Department", df["Department"].unique())
-g_filter = st.sidebar.multiselect("Filter by Gender", df["Gender"].unique())
-
+# ---------------------------------------------------------------
+# Sidebar Filters
+# ---------------------------------------------------------------
+st.sidebar.header("🔍 Filters")
 filtered = df.copy()
-if d_filter:
-    filtered = filtered[filtered["Department"].isin(d_filter)]
-if g_filter:
-    filtered = filtered[filtered["Gender"].isin(g_filter)]
 
-# ------------------------------------------------------------
-# KPI Cards
-# ------------------------------------------------------------
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Employees", len(filtered))
-col2.metric("Actual Promotion %", f"{(filtered['Promotion'].eq('Yes').mean() * 100):.2f}%")
-col3.metric("Predicted Promotion %", f"{(filtered['Prediction'].eq('Yes').mean() * 100):.2f}%")
-col4.metric("Mismatch count", sum(filtered["Promotion"] != filtered["Prediction"]))
+if "Department" in df.columns:
+    d_filter = st.sidebar.multiselect("Filter by Department", df["Department"].unique())
+    if d_filter:
+        filtered = filtered[filtered["Department"].isin(d_filter)]
+
+if "Gender" in df.columns:
+    g_filter = st.sidebar.multiselect("Filter by Gender", df["Gender"].unique())
+    if g_filter:
+        filtered = filtered[filtered["Gender"].isin(g_filter)]
+
+# ---------------------------------------------------------------
+# KPI Metrics (Prediction = Final Promotion Result)
+# ---------------------------------------------------------------
+total = len(filtered)
+promoted = filtered["Prediction"].eq("Yes").sum()
+
+col1, col2, col3 = st.columns(3)
+col1.metric("Total Employees", total)
+col2.metric("Employees Promoted", promoted)
+col3.metric("Promotion %", f"{(promoted / total * 100):.2f}%")
 
 st.markdown("---")
 
-# ------------------------------------------------------------
-# 🔥 Visuals
-# ------------------------------------------------------------
+# ---------------------------------------------------------------
+# Visuals
+# ---------------------------------------------------------------
 
-st.subheader("📌 Employee Count by Department")
-st.plotly_chart(px.bar(filtered, x="Department", title="Employee Count"), use_container_width=True)
+if "Department" in df.columns:
+    st.subheader("📌 Promotion Count by Department")
+    st.plotly_chart(px.histogram(
+        filtered, x="Department", color="Prediction", barmode="group",
+        title="Promotion Distribution by Department"
+    ), use_container_width=True)
 
-st.subheader("📌 Gender Distribution by Department")
-st.plotly_chart(
-    px.histogram(filtered, x="Department", color="Gender", barmode="group",
-                 title="Gender Distribution Across Departments"),
-    use_container_width=True,
-)
+if "Gender" in df.columns:
+    st.subheader("📌 Promotion Count by Gender")
+    st.plotly_chart(px.histogram(
+        filtered, x="Gender", color="Prediction", barmode="group",
+        title="Promotion Distribution by Gender"
+    ), use_container_width=True)
 
-st.subheader("📌 Actual Promotion by Department")
-st.plotly_chart(
-    px.histogram(filtered, x="Department", color="Promotion", barmode="group",
-                 title="Actual Promotions by Department"),
-    use_container_width=True,
-)
-
-st.subheader("📌 Predicted Promotion by Department")
-st.plotly_chart(
-    px.histogram(filtered, x="Department", color="Prediction", barmode="group",
-                 title="Predicted Promotions by Department"),
-    use_container_width=True,
-)
-
-# 5 — Heatmap only if probability column exists
-if "Promotion_Probability" in filtered.columns:
+# Promotion Probability Heatmap (only if column exists)
+prob_col = next((c for c in df.columns if "prob" in c.lower()), None)
+if prob_col and "Satisfaction" in df.columns and "PerformanceScore" in df.columns:
     st.subheader("📌 Promotion Probability Heatmap")
-    st.plotly_chart(
-        px.density_heatmap(
-            filtered,
-            x="Satisfaction",
-            y="PerformanceScore",
-            z="Promotion_Probability",
-            title="Probability Distribution for Promotion",
-        ),
-        use_container_width=True,
-    )
+    st.plotly_chart(px.density_heatmap(
+        filtered, x="Satisfaction", y="PerformanceScore", z=prob_col,
+        title="Probability Distribution"
+    ), use_container_width=True)
 
-# 6 — Actual vs Predicted Promotion % by Department
-st.subheader("📌 Actual vs Predicted Promotion % — Department Level")
-compare = filtered.groupby("Department")[["Promotion", "Prediction"]].apply(
-    lambda x: pd.Series({
-        "Actual %": x["Promotion"].eq("Yes").mean() * 100,
-        "Predicted %": x["Prediction"].eq("Yes").mean() * 100
-    })
-).reset_index()
-
-st.plotly_chart(
-    px.bar(compare, x="Department", y=["Actual %", "Predicted %"],
-           barmode="group", title="Actual vs Predicted Promotion Comparison"),
-    use_container_width=True,
-)
-
+# ---------------------------------------------------------------
+# Table + download
+# ---------------------------------------------------------------
 st.markdown("---")
-
-# ------------------------------------------------------------
-# Table + Download
-# ------------------------------------------------------------
-st.subheader("📋 Preview Dataset")
+st.subheader("📋 Dataset Preview")
 st.dataframe(filtered, use_container_width=True)
 
 csv = filtered.to_csv(index=False).encode("utf-8")
@@ -134,3 +105,5 @@ st.download_button(
     file_name="Filtered_Promotions.csv",
     mime="text/csv"
 )
+
+
