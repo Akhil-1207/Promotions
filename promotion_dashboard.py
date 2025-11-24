@@ -7,9 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/1gS8ErtzyrfIFxUHAYSRUfcTmYD_CZJUv
 """
 
-from google.colab import files
-uploaded = files.upload()
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -82,7 +79,7 @@ fig5 = px.bar(filtered.groupby("Department")["PerformanceScore"].mean().reset_in
               title="Average Performance Score by Department")
 st.plotly_chart(fig5, use_container_width=True)
 
-# ---------------- Visual 6: Heatmap — Promotion by Age Group & Department ---------------- #
+# ---------------- Visual 6: Heatmap – Promotion by Age Group & Department ---------------- #
 heatmap_data = filtered.pivot_table(values="Promotion_Predicted", index="Age_Category", columns="Department", aggfunc="sum")
 fig6 = px.imshow(heatmap_data, text_auto=True, title="Promotion Heatmap by Age Category and Department")
 st.plotly_chart(fig6, use_container_width=True)
@@ -96,4 +93,3 @@ st.dataframe(filtered)
 # ---------------- Download Button ---------------- #
 csv = filtered.to_csv(index=False).encode("utf-8")
 st.download_button("⬇ Download Filtered Dataset", data=csv, file_name="Filtered_Promotion_Data.csv", mime="text/csv")
-
