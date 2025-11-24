@@ -8,128 +8,129 @@ Original file is located at
 """
 
 # ------------------------------------------------------------
-# 📌 HR Promotions Analytics Dashboard
+# 🎯 HR Promotions Dashboard (Works only with Final_Promotions_Predicted_Dataset.csv)
 # ------------------------------------------------------------
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import os
 
-# ------------------------------------------------------------
-# Page Setup
-# ------------------------------------------------------------
 st.set_page_config(page_title="HR Promotions Dashboard", layout="wide")
-st.title("🎯 HR Promotions Analytics Dashboard")
+st.title("📊 HR Promotions Analytics Dashboard")
 
 # ------------------------------------------------------------
-# Load Dataset
+# Load Dataset (specific to user's uploaded file)
 # ------------------------------------------------------------
 @st.cache_data
 def load_data():
-    return pd.read_csv("Promotion_Predictions_Updated.csv") # Changed to use Promotion_Predictions_Updated.csv
+    file_name = "Final_Promotions_Predicted_Dataset.csv"
+    if not os.path.exists(file_name):
+        st.error(f"❌ File '{file_name}' not found. Place the CSV in the same folder as dashboard.py")
+        st.stop()
+    return pd.read_csv(file_name)
 
 df = load_data()
 
-# Convert Promotion_Predicted column to readable labels if it exists
-if "Promotion_Predicted" in df.columns:
-    df["Promotion_Predicted"] = df["Promotion_Predicted"].map({1: "Yes", 0: "No"})
+# Rename 0/1 values to Yes/No to improve readability
+if "Promotion" in df.columns:
+    df["Promotion"] = df["Promotion"].map({1: "Yes", 0: "No"})
+if "Prediction" in df.columns:
+    df["Prediction"] = df["Prediction"].map({1: "Yes", 0: "No"})
 
 # ------------------------------------------------------------
-# Filters Panel
+# Filters
 # ------------------------------------------------------------
 st.sidebar.header("🔍 Filter Data")
-departments = st.sidebar.multiselect("Select Department", df["Department"].unique())
-genders = st.sidebar.multiselect("Select Gender", df["Gender"].unique())
+d_filter = st.sidebar.multiselect("Filter by Department", df["Department"].unique())
+g_filter = st.sidebar.multiselect("Filter by Gender", df["Gender"].unique())
 
-filtered_df = df.copy()
-if departments:
-    filtered_df = filtered_df[filtered_df["Department"].isin(departments)]
-if genders:
-    filtered_df = filtered_df[filtered_df["Gender"].isin(genders)]
+filtered = df.copy()
+if d_filter:
+    filtered = filtered[filtered["Department"].isin(d_filter)]
+if g_filter:
+    filtered = filtered[filtered["Gender"].isin(g_filter)]
 
 # ------------------------------------------------------------
-# KPI Metrics
+# KPI Cards
 # ------------------------------------------------------------
 col1, col2, col3, col4 = st.columns(4)
-
-col1.metric("Total Employees", len(filtered_df))
-# Using 'Promotion_Predicted' for both actual and predicted due to data availability
-col2.metric("Promotion %", f"{(filtered_df['Promotion_Predicted'].eq('Yes').mean() * 100):.2f}%")
-col3.metric("Predicted Promotion %", f"{(filtered_df['Promotion_Predicted'].eq('Yes').mean() * 100):.2f}%")
-col4.metric("Mismatch Records", sum(filtered_df["Promotion_Predicted"] != filtered_df["Promotion_Predicted"])) # Will be 0
+col1.metric("Total Employees", len(filtered))
+col2.metric("Actual Promotion %", f"{(filtered['Promotion'].eq('Yes').mean() * 100):.2f}%")
+col3.metric("Predicted Promotion %", f"{(filtered['Prediction'].eq('Yes').mean() * 100):.2f}%")
+col4.metric("Mismatch count", sum(filtered["Promotion"] != filtered["Prediction"]))
 
 st.markdown("---")
 
 # ------------------------------------------------------------
-# 🔥 6 Visuals for Insights
+# 🔥 Visuals
 # ------------------------------------------------------------
 
-# 1 — Employee Count by Department
-st.subheader("📊 Visual 1 — Employee Count by Department")
-st.plotly_chart(px.bar(filtered_df, x="Department", title="Employee Count by Department"), use_container_width=True)
+st.subheader("📌 Employee Count by Department")
+st.plotly_chart(px.bar(filtered, x="Department", title="Employee Count"), use_container_width=True)
 
-# 2 — Gender Distribution by Department
-st.subheader("📊 Visual 2 — Gender Distribution by Department")
+st.subheader("📌 Gender Distribution by Department")
 st.plotly_chart(
-    px.histogram(filtered_df, x="Department", color="Gender", barmode="group", title="Gender Breakdown per Department"),
+    px.histogram(filtered, x="Department", color="Gender", barmode="group",
+                 title="Gender Distribution Across Departments"),
     use_container_width=True,
 )
 
-# 3 — Promotion Rate by Department
-st.subheader("📊 Visual 3 — Promotion Rate by Department")
+st.subheader("📌 Actual Promotion by Department")
 st.plotly_chart(
-    px.histogram(filtered_df, x="Department", color="Promotion_Predicted", barmode="group",
-                 title="Promotion Distribution by Department"),
+    px.histogram(filtered, x="Department", color="Promotion", barmode="group",
+                 title="Actual Promotions by Department"),
     use_container_width=True,
 )
 
-# 4 — Another view of Promotion Rate by Department
-st.subheader("📊 Visual 4 — Another Promotion Rate by Department")
+st.subheader("📌 Predicted Promotion by Department")
 st.plotly_chart(
-    px.histogram(filtered_df, x="Department", color="Promotion_Predicted", barmode="group",
-                 title="Promotion Distribution by Department (Another View)"),
+    px.histogram(filtered, x="Department", color="Prediction", barmode="group",
+                 title="Predicted Promotions by Department"),
     use_container_width=True,
 )
 
-# 5 — Heatmap for Promotion Probability (if column exists)
-if "Promotion_Probability" in df.columns:
-    st.subheader("📊 Visual 5 — Heatmap of Promotion Probability")
+# 5 — Heatmap only if probability column exists
+if "Promotion_Probability" in filtered.columns:
+    st.subheader("📌 Promotion Probability Heatmap")
     st.plotly_chart(
         px.density_heatmap(
-            filtered_df,
+            filtered,
             x="Satisfaction",
             y="PerformanceScore",
             z="Promotion_Probability",
-            title="Promotion Probability Heatmap"
+            title="Probability Distribution for Promotion",
         ),
         use_container_width=True,
     )
 
-# 6 — Promotion % by Department
-st.subheader("📊 Visual 6 — Promotion % by Department")
-df_compare = filtered_df.groupby("Department")["Promotion_Predicted"].apply(
+# 6 — Actual vs Predicted Promotion % by Department
+st.subheader("📌 Actual vs Predicted Promotion % — Department Level")
+compare = filtered.groupby("Department")[["Promotion", "Prediction"]].apply(
     lambda x: pd.Series({
-        "Promotion%": (x.eq("Yes").mean()) * 100
+        "Actual %": x["Promotion"].eq("Yes").mean() * 100,
+        "Predicted %": x["Prediction"].eq("Yes").mean() * 100
     })
 ).reset_index()
 
 st.plotly_chart(
-    px.bar(df_compare, x="Department", y="Promotion_Predicted",
-           title="Promotion % Comparison"),
+    px.bar(compare, x="Department", y=["Actual %", "Predicted %"],
+           barmode="group", title="Actual vs Predicted Promotion Comparison"),
     use_container_width=True,
 )
 
 st.markdown("---")
 
 # ------------------------------------------------------------
-# Table + Download Option
+# Table + Download
 # ------------------------------------------------------------
-st.subheader("📋 Dataset Preview With Predictions")
-st.dataframe(filtered_df, use_container_width=True)
+st.subheader("📋 Preview Dataset")
+st.dataframe(filtered, use_container_width=True)
 
-csv = filtered_df.to_csv(index=False).encode("utf-8")
+csv = filtered.to_csv(index=False).encode("utf-8")
 st.download_button(
     "⬇ Download Filtered Dataset",
     data=csv,
-    file_name="Filtered_Promotions_Dataset.csv",
+    file_name="Filtered_Promotions.csv",
     mime="text/csv"
 )
