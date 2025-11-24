@@ -30,7 +30,7 @@ if not os.path.exists(file_name):
 df = pd.read_csv(file_name)
 
 # -----------------------------------------------------------
-# Auto-detect frequently used columns
+# Auto-detect columns
 # -----------------------------------------------------------
 columns = {c.lower().strip(): c for c in df.columns}
 
@@ -42,7 +42,6 @@ exp_col        = next((v for k, v in columns.items() if "experience" in k or "ex
 salary_col     = next((v for k, v in columns.items() if "salary" in k or "ctc" in k or "income" in k), None)
 age_col        = next((v for k, v in columns.items() if "age" in k or "tenure" in k or "service" in k), None)
 
-# Convert 0/1 to Yes/No if needed
 df[promotion_col] = df[promotion_col].replace({1: "Yes", 0: "No"})
 
 # -----------------------------------------------------------
@@ -53,11 +52,13 @@ st.sidebar.header("🔍 Filters")
 
 if dept_col:
     d = st.sidebar.multiselect("Department", df[dept_col].unique())
-    if d: filtered = filtered[filtered[dept_col].isin(d)]
+    if d:
+        filtered = filtered[filtered[dept_col].isin(d)]
 
 if gender_col:
     g = st.sidebar.multiselect("Gender", df[gender_col].unique())
-    if g: filtered = filtered[gender_col].isin(g)]
+    if g:
+        filtered = filtered[filtered[gender_col].isin(g)]
 
 # -----------------------------------------------------------
 # KPI Cards
@@ -76,7 +77,7 @@ c4.metric("Promotion %", f"{promotion_rate:.2f}%")
 st.markdown("---")
 
 # -----------------------------------------------------------
-# 🎨 Visuals (6 with different colors)
+# 🎨 Visuals (6 visuals with unique colors)
 # -----------------------------------------------------------
 
 # 1 Promotion by Department
@@ -106,7 +107,7 @@ if exp_col:
     )
     st.plotly_chart(fig3, use_container_width=True)
 
-# 4 Promotion by Salary Range
+# 4 Promotion by Salary
 if salary_col:
     st.subheader("📌 Promotion by Salary Range")
     fig4 = px.histogram(
@@ -124,7 +125,7 @@ if age_col:
     )
     st.plotly_chart(fig5, use_container_width=True)
 
-# 6 Promotion Probability Distribution (if exists)
+# 6 Promotion Probability Distribution
 if prob_col:
     st.subheader("📌 Promotion Probability Distribution")
     fig6 = px.histogram(
@@ -136,7 +137,7 @@ if prob_col:
 st.markdown("---")
 
 # -----------------------------------------------------------
-# 🌟 Top 20 Candidates Eligible for Promotion
+# 🏆 Top 20 Eligible Candidates (only if probability column exists)
 # -----------------------------------------------------------
 if prob_col:
     st.subheader("🏆 Top 20 Most Eligible Employees for Promotion")
@@ -146,45 +147,41 @@ if prob_col:
 st.markdown("---")
 
 # -----------------------------------------------------------
-# 🧠 AI-Style Automatic Insights (text only)
+# 🧠 Automatic Insights
 # -----------------------------------------------------------
-st.subheader("🧠 Key Insights From Promotions Data")
+st.subheader("🧠 Key Insights From Data")
 
 insights = []
 
 if dept_col:
     best_dept = filtered[filtered[promotion_col] == "Yes"][dept_col].mode()
     if not best_dept.empty:
-        insights.append(f"🔹 Highest promotions observed in **{best_dept.iloc[0]}** department.")
+        insights.append(f"🔹 Highest promotion rate seen in **{best_dept.iloc[0]}** department.")
 
 if gender_col:
-    male_rate = filtered[filtered[gender_col] == filtered[gender_col].unique()[0]][promotion_col].eq("Yes").mean()
-    female_rate = filtered[filtered[gender_col] == filtered[gender_col].unique()[-1]][promotion_col].eq("Yes").mean()
-    if male_rate != female_rate:
-        if male_rate > female_rate:
-            insights.append("🔹 **Male employees** appear more likely to be promoted.")
-        else:
-            insights.append("🔹 **Female employees** appear more likely to be promoted.")
+    gender_stats = filtered.groupby(gender_col)[promotion_col].mean().sort_values(ascending=False)
+    highest_gender = gender_stats.index[0]
+    insights.append(f"🔹 **{highest_gender}** employees appear more likely to be promoted.")
 
 if exp_col:
-    insights.append("🔹 Higher work experience correlates strongly with promotion probability.")
+    insights.append("🔹 Higher work experience is positively associated with promotion.")
 
 if salary_col:
-    insights.append("🔹 Employees with higher salary ranges show higher promotion likelihood.")
+    insights.append("🔹 Employees in higher salary brackets show higher promotion likelihood.")
 
 if prob_col:
-    insights.append("🔹 Probability model provides strong separation between promoted and non-promoted employees.")
+    insights.append("🔹 Probability model sharply distinguishes promotable employees.")
 
 if len(insights) == 0:
-    insights.append("🔹 No clear insights detectable from dataset.")
+    insights.append("🔹 Not enough variation to extract meaningful insights.")
 
-for line in insights:
-    st.write(line)
+for point in insights:
+    st.write(point)
 
 st.markdown("---")
 
 # -----------------------------------------------------------
-# Download Dataset (Filtered)
+# Download dataset
 # -----------------------------------------------------------
 csv = filtered.to_csv(index=False).encode("utf-8")
 st.download_button("⬇ Download Filtered Dataset",
