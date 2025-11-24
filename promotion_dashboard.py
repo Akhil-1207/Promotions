@@ -147,40 +147,7 @@ if prob_col:
 st.markdown("---")
 
 # -----------------------------------------------------------
-# 🧠 Automatic Insights
-# -----------------------------------------------------------
-st.subheader("🧠 Key Insights From Data")
 
-insights = []
-
-if dept_col:
-    best_dept = filtered[filtered[promotion_col] == "Yes"][dept_col].mode()
-    if not best_dept.empty:
-        insights.append(f"🔹 Highest promotion rate seen in **{best_dept.iloc[0]}** department.")
-
-if gender_col:
-    gender_stats = filtered.groupby(gender_col)[promotion_col].mean().sort_values(ascending=False)
-    highest_gender = gender_stats.index[0]
-    insights.append(f"🔹 **{highest_gender}** employees appear more likely to be promoted.")
-
-if exp_col:
-    insights.append("🔹 Higher work experience is positively associated with promotion.")
-
-if salary_col:
-    insights.append("🔹 Employees in higher salary brackets show higher promotion likelihood.")
-
-if prob_col:
-    insights.append("🔹 Probability model sharply distinguishes promotable employees.")
-
-if len(insights) == 0:
-    insights.append("🔹 Not enough variation to extract meaningful insights.")
-
-for point in insights:
-    st.write(point)
-
-st.markdown("---")
-
-# -----------------------------------------------------------
 # Download dataset
 # -----------------------------------------------------------
 csv = filtered.to_csv(index=False).encode("utf-8")
